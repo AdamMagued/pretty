@@ -84,6 +84,39 @@ func ugly(dst, src []byte) []byte {
 	return dst
 }
 
+// Python removes insignificant space characters from the input json byte slice
+// and returns a single-line result matching Python's default json.dumps output,
+// where each colon and comma is followed by a single space.
+func Python(json []byte) []byte {
+	buf := make([]byte, 0, len(json))
+	return python(buf, json)
+}
+
+func python(dst, src []byte) []byte {
+	dst = dst[:0]
+	for i := 0; i < len(src); i++ {
+		if src[i] > ' ' {
+			dst = append(dst, src[i])
+			if src[i] == '"' {
+				for i = i + 1; i < len(src); i++ {
+					dst = append(dst, src[i])
+					if src[i] == '"' {
+						j := len(dst) - 2
+						for ; dst[j] == '\\'; j-- {
+						}
+						if (j-(len(dst)-1))%2 != 0 {
+							break
+						}
+					}
+				}
+			} else if src[i] == ':' || src[i] == ',' {
+				dst = append(dst, ' ')
+			}
+		}
+	}
+	return dst
+}
+
 func isNaNOrInf(src []byte) bool {
 	return src[0] == 'i' || //Inf
 		src[0] == 'I' || // inf

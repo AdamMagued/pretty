@@ -85,6 +85,7 @@ func TestRandom(t *testing.T) {
 		rand.Read(b)
 		Pretty(b)
 		Ugly(b)
+		Python(b)
 	}
 }
 func TestBig(t *testing.T) {
@@ -594,3 +595,56 @@ func TestUglyInPlaceEscapedStrings(t *testing.T) {
 	u(t, ` {"\\":"a b", "nested": [{"quote":"\\\"", "text":"c d"}]}`)
 	u(t, `  {"\\":"a b", "nested": [{"quote":"\\\"", "text":"c d"}]}`)
 }
+
+func TestPython(t *testing.T) {
+	assertEqual(t, `{"a": 1}`, string(Python([]byte(`{"a":1}`))))
+	assertEqual(t, `{"a": 1, "b": [1, 2, 3]}`, string(Python([]byte(`{"a":1,"b":[1,2,3]}`))))
+
+	expectedExample1 := `{"name": {"last": "Sanders", "first": "Janet"}, "children": ["Andy", "Carol", "Mike"], "values": [10.10, true, false, null, "hello", {}], "values2": {}, "values3": [], "deep": {"deep": {"deep": [1, 2, 3, 4, 5]}}}`
+	py1 := Python(example1)
+	assertEqual(t, expectedExample1, string(py1))
+	assertEqual(t, expectedExample1, string(Python(py1)))
+	assertEqual(t, expectedExample1, string(Python(Ugly(example1))))
+	assertEqual(t, expectedExample1, string(Python(Pretty(example1))))
+	assertEqual(t, string(Ugly(example1)), string(Ugly(py1)))
+
+	expectedExample2 := `[0, 10, 10.10, true, false, null, "hello \" "]`
+	assertEqual(t, expectedExample2, string(Python([]byte(example2))))
+
+	assertEqual(t, "", string(Python([]byte("   \t\n\r "))))
+	assertEqual(t, "", string(Python(nil)))
+	assertEqual(t, `{}`, string(Python([]byte(`{  }`))))
+	assertEqual(t, `[]`, string(Python([]byte(`[  ]`))))
+	assertEqual(t, `[{}, []]`, string(Python([]byte(`[ {} , [] ]`))))
+}
+
+func TestPythonEscapedStrings(t *testing.T) {
+	cases := []struct {
+		in  string
+		exp string
+	}{
+		{`  ["\\", "a b"]`, `["\\", "a b"]`},
+		{`  ["\\\\", "a b"]`, `["\\\\", "a b"]`},
+		{"\t\n" + `  ["\\\\", "a,b:c"]`, `["\\\\", "a,b:c"]`},
+		{` ["a\" b", "c:d,e"]`, `["a\" b", "c:d,e"]`},
+		{` ["\\\" x:y,z", "a b"]`, `["\\\" x:y,z", "a b"]`},
+		{`  {"a":"\\", "b":"c:d,e"}`, `{"a": "\\", "b": "c:d,e"}`},
+		{` {"\\":"a:b,c", "nested": [{"quote":"\\\"", "text":"c,d:e"}]}`, `{"\\": "a:b,c", "nested": [{"quote": "\\\"", "text": "c,d:e"}]}`},
+		{`{"unterminated":"a:b,c`, `{"unterminated": "a:b,c`},
+	}
+	for _, tc := range cases {
+		got := string(Python([]byte(tc.in)))
+		if got != tc.exp {
+			t.Fatalf("for '%s', expected '%s', got '%s'", tc.in, tc.exp, got)
+		}
+	}
+}
+
+func BenchmarkPython(t *testing.B) {
+	t.ReportAllocs()
+	t.ResetTimer()
+	for i := 0; i < t.N; i++ {
+		Python(example1)
+	}
+}
+
